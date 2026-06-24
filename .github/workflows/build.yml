@@ -48,24 +48,4 @@ jobs:
           tar -cJf UT-24.02_v3.tar.xz boot.img vendor_boot.img ubuntu.img
           cd ..
 
-      # --- Upload the archive as build artifact (for CI logs) ---
-      - name: Upload the archive to artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: UT-24.02_v3
-          path: out/UT-24.02_v3.tar.xz
-          if-no-files-found: error
-
-      # --- Publish to GitHub Releases ---
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: "UT-24.02_v${{ github.run_number }}"
-          name: "Ubuntu Touch 24.02 Build #${{ github.run_number }}"
-          files: out/UT-24.02_v3.tar.xz
-          body: |
-            Automated build for ${{ github.repository }}
-            Commit: ${{ github.sha }}
-            Triggered by: ${{ github.actor }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
