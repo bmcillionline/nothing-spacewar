@@ -1,0 +1,96 @@
+name: Build Droidian SpaceWar Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - droidian
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------
+      # APT CACHE
+      # ---------------------------------------------------------
+      - name: Cache APT packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-cache-${{ runner.os }}
+          restore-keys: |
+            apt-cache-
+
+      - name: Install required packages
+        run: |
+          sudo apt update
+          sudo apt install -y unzip zip xz-utils jq curl
+
+      # ---------------------------------------------------------
+      # BASE IMAGE CACHE
+      # ---------------------------------------------------------
+      - name: Cache Droidian base image
+        id: basecache
+        uses: actions/cache@v4
+        with:
+          path: droidian-base.zip
+          key: droidian-base-20260402
+
+      - name: Download new Droidian base image (if missing)
+        if: steps.basecache.outputs.cache-hit != 'true'
+        run: |
+          echo "Downloading new Droidian base image..."
+          curl -L \
+          "https://release-assets.githubusercontent.com/github-production-release-asset/487566440/5418a414-94bd-458f-bc95-381bef74a14b?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-06-28T06%3A43%3A46Z&rscd=attachment%3B+filename%3Ddroidian-OFFICIAL-phosh-phone-rootfs-api33-arm64-next_20260402.zip&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-06-28T05%3A42%3A48Z&ske=2026-06-28T06%3A43%3A46Z&sks=b&skv=2018-11-09&sig=d4xlkssk48flTFx5xYvZVaERs4jf9wndix4u0QNDkPI%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4MjYzMDI5NSwibmJmIjoxNzgyNjI2Njk1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.2tA35VOTq4gHDUGgTC3ulKd25oht7dHYatIvW8PNVNs&response-content-disposition=attachment%3B%20filename%3Ddroidian-OFFICIAL-phosh-phone-rootfs-api33-arm64-next_20260402.zip&response-content-type=application%2Foctet-stream" \
+          -o droidian-base.zip
+      - name: Extract base image
+        run: |
+          mkdir base
+          unzip -o droidian-base.zip -d base
+
+      # ---------------------------------------------------------
+      # ROOTFS BUILD CACHE
+      # ---------------------------------------------------------
+      - name: Cache rootfs build
+        id: rootfscache
+        uses: actions/cache@v4
+    no d   with:
+          path: build/rootfs.tar.xz
+          key: rootfs-${{ hashFiles('overlay/**') }}
+          restore-keys: |
+            rootfs-
+
+      - name: Prepare workspace
+        run: |
+          mkdir -p build
+          cp -r base/* build/
+
+      - name: Apply SpaceWar overlay
+        run: |
+          echo "Applying overlay..."
+          cp -r overlay/* build/rootfs/
+
+      - name: Repack rootfs (only if overlay changed)
+        if: steps.rootfscache.outputs.cache-hit != 'true'
+        run: |
+          cd build/rootfs
+          sudo tar -cpf ../rootfs.tar .
+          cd ..
+          xz -z rootfs.tar
+
+      - name: Package final image
+        run: |
+          mkdir output
+          cp build/rootfs.tar.xz output/
+          cp -r build/boot output/
+          zip -r spacewar-droidian.zip output/
+
+      - name: Upload final image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacewar-droidian-image
+          path: spacewar-droidian.zip
